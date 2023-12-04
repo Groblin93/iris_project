@@ -1,4 +1,4 @@
-23.9.1default_language_version:
+default_language_version:
   python: python3.8
 
 repos:
@@ -44,7 +44,6 @@ repos:
     hooks:
       - id: prettier
         types_or: [markdown, yaml, toml, json, dockerfile, shell]
-        additional_dependencies: ["prettier@2.6.2", "prettier-plugin-sh@0.10.2"]
         args: [--print-width=80, --prose-wrap=always]
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
