@@ -1,5 +1,6 @@
 import pickle
 
+import dvc.api
 import numpy as np
 import pandas as pd
 import torch
@@ -30,15 +31,24 @@ def train_network(
         train_losses[epoch] = loss_train.item()
 
 
-def read_data(data_name):
-    csv_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
-    col_names = ["Sepal_Length", "Sepal_Width", "Petal_Length", "Petal_Width", "Species"]
-    df = pd.read_csv(csv_url, names=col_names)
-    df["Species"] = df["Species"].map(
-        {"Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2}
-    )
-    X = df.drop(["Species"], axis=1).values
-    y = df["Species"].values
+def read_data():
+    with dvc.api.open(
+        "data/Iris.csv", repo="https://github.com/Groblin93/iris_project"
+    ) as f:
+        col_names = [
+            "Sepal_Length",
+            "Sepal_Width",
+            "Petal_Length",
+            "Petal_Width",
+            "Species",
+        ]
+        df = pd.read_csv(f, names=col_names)
+        df["Species"] = df["Species"].map(
+            {"Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2}
+        )
+        X = df.drop(["Species"], axis=1).values
+        y = df["Species"].values
+
     return X, y
 
 
@@ -57,17 +67,17 @@ def tts(X, y):
 
 
 def main():
-    data_name = "Iris.csv"
-    X, y = read_data(data_name)
+    X, y = read_data()
     X_train, y_train = tts(X, y)
 
     input_dim = 4
     output_dim = 3
+    learning_rate = 0.1
+    num_epochs = 1000
+
     model = nn_classification_model(input_dim, output_dim)
-    learning_rate = 0.01
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    num_epochs = 1000
     train_losses = np.zeros(num_epochs)
 
     train_network(model, optimizer, criterion, X_train, y_train, num_epochs, train_losses)
