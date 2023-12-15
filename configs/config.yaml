@@ -1,0 +1,26 @@
+data:
+  name: Iris.csv
+  X_name: X_test.csv
+  y_name: y_test.csv
+  y_pred_name: y_pred.csv
+  path: data/
+  repo: https://github.com/Groblin93/iris_project
+  col_names:
+    ["Sepal_Length", "Sepal_Width", "Petal_Length", "Petal_Width", "Species"]
+  nums: { "Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2 }
+  test_size: 0.3
+  seed: 21
+
+model:
+  name: Iris_model.sav
+  path: models/
+  input_dim: 4
+  output_dim: 3
+  lays: [64, 32]
+
+training:
+  rate: 0.01
+  num_epochs: 100
+
+metric:
+  round: 3

@@ -2,11 +2,11 @@ import torch.nn as nn
 
 
 class nn_classification_model(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, model):
         super(nn_classification_model, self).__init__()
-        self.input_layer = nn.Linear(input_dim, 128)
-        self.hidden_layer1 = nn.Linear(128, 64)
-        self.output_layer = nn.Linear(64, output_dim)
+        self.input_layer = nn.Linear(model.input_dim, model.lays[0])
+        self.hidden_layer1 = nn.Linear(model.lays[0], model.lays[1])
+        self.output_layer = nn.Linear(model.lays[1], model.output_dim)
         self.relu = nn.ReLU()
 
     def forward(self, x):

@@ -1,6 +1,7 @@
 import pickle
 
 import dvc.api
+import hydra
 import numpy as np
 import pandas as pd
 import torch
@@ -31,57 +32,50 @@ def train_network(
         train_losses[epoch] = loss_train.item()
 
 
-def read_data():
-    with dvc.api.open(
-        "data/Iris.csv", repo="https://github.com/Groblin93/iris_project"
-    ) as f:
-        col_names = [
-            "Sepal_Length",
-            "Sepal_Width",
-            "Petal_Length",
-            "Petal_Width",
-            "Species",
-        ]
-        df = pd.read_csv(f, names=col_names)
-        df["Species"] = df["Species"].map(
-            {"Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2}
-        )
+def read_data(data):
+    with dvc.api.open(data.path + data.name, repo=data.repo) as f:
+        df = pd.read_csv(f, names=data.col_names)
+        df["Species"] = df["Species"].map(data.nums)
         X = df.drop(["Species"], axis=1).values
         y = df["Species"].values
 
     return X, y
 
 
-def tts(X, y):
+def tts(X, y, data):
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.30, random_state=42
+        X, y, test_size=data.test_size, random_state=data.seed
     )
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.fit_transform(X_test)
     X_train = torch.FloatTensor(X_train)
     y_train = torch.LongTensor(y_train)
-    np.savetxt("data/X_test.csv", X_test, delimiter=",")
-    np.savetxt("data/y_test.csv", y_test, delimiter=",")
+    np.savetxt(data.path + data.X_name, X_test, delimiter=",")
+    np.savetxt(data.path + data.y_name, y_test, delimiter=",")
     return X_train, y_train
 
 
-def main():
-    X, y = read_data()
-    X_train, y_train = tts(X, y)
+@hydra.main(config_path="configs", config_name="config", version_base="1.3.2")
+def main(cfg):
+    X, y = read_data(cfg.data)
+    X_train, y_train = tts(X, y, cfg.data)
 
-    input_dim = 4
-    output_dim = 3
-    learning_rate = 0.1
-    num_epochs = 1000
-
-    model = nn_classification_model(input_dim, output_dim)
+    model = nn_classification_model(cfg.model)
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    train_losses = np.zeros(num_epochs)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.rate)
+    train_losses = np.zeros(cfg.training.num_epochs)
 
-    train_network(model, optimizer, criterion, X_train, y_train, num_epochs, train_losses)
-    pickle.dump(model, open("models/Iris_model.sav", "wb"))
+    train_network(
+        model,
+        optimizer,
+        criterion,
+        X_train,
+        y_train,
+        cfg.training.num_epochs,
+        train_losses,
+    )
+    pickle.dump(model, open(cfg.model.path + cfg.model.name, "wb"))
 
 
 if __name__ == "__main__":
