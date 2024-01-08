@@ -8,19 +8,32 @@ data:
   col_names:
     ["Sepal_Length", "Sepal_Width", "Petal_Length", "Petal_Width", "Species"]
   nums: { "Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2 }
-  test_size: 0.3
-  seed: 21
+  test_size: 0.20
+  val_size: 0.25
+  num_workers: 4
+  batch_size: 3
 
 model:
   name: Iris_model.sav
+  name_onnx: Iris_model.onnx
   path: models/
   input_dim: 4
   output_dim: 3
-  lays: [64, 32]
+  lays: [21, 12]
 
 training:
   rate: 0.01
-  num_epochs: 100
+  num_epochs: 40
+  log_step: 1
+
+callbacks:
+  model_summary:
+    max_depth: 1
 
 metric:
   round: 3
+
+logg:
+  exp_name: example-experiment
+  uri: http://127.0.0.1:8080
+  gc_id: 58d34d9d1ceb8b9b851aaad475e967ba82f8cc46

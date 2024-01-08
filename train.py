@@ -1,81 +1,74 @@
 import pickle
 
-import dvc.api
 import hydra
-import numpy as np
-import pandas as pd
+import mlflow
+import onnx
+import pytorch_lightning as pl
 import torch
-from iris_project.my_types import nn_classification_model
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
-
-def train_network(
-    model, optimizer, criterion, X_train, y_train, num_epochs, train_losses
-):
-    for epoch in range(num_epochs):
-        # clear out the gradients from the last step loss.backward()
-        optimizer.zero_grad()
-
-        # forward feed
-        output_train = model(X_train)
-
-        # calculate the loss
-        loss_train = criterion(output_train, y_train)
-
-        # backward propagation: calculate gradients
-        loss_train.backward()
-
-        # update the weights
-        optimizer.step()
-
-        train_losses[epoch] = loss_train.item()
-
-
-def read_data(data):
-    with dvc.api.open(data.path + data.name, repo=data.repo) as f:
-        df = pd.read_csv(f, names=data.col_names)
-        df["Species"] = df["Species"].map(data.nums)
-        X = df.drop(["Species"], axis=1).values
-        y = df["Species"].values
-
-    return X, y
-
-
-def tts(X, y, data):
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=data.test_size, random_state=data.seed
-    )
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.fit_transform(X_test)
-    X_train = torch.FloatTensor(X_train)
-    y_train = torch.LongTensor(y_train)
-    np.savetxt(data.path + data.X_name, X_test, delimiter=",")
-    np.savetxt(data.path + data.y_name, y_test, delimiter=",")
-    return X_train, y_train
+from iris_project.my_types import data_module, lightning_nn_classification_model
+from mlflow import MlflowClient
+from mlflow.models import infer_signature
 
 
 @hydra.main(config_path="configs", config_name="config", version_base="1.3.2")
 def main(cfg):
-    X, y = read_data(cfg.data)
-    X_train, y_train = tts(X, y, cfg.data)
+    pl.seed_everything(42)
 
-    model = nn_classification_model(cfg.model)
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.training.rate)
-    train_losses = np.zeros(cfg.training.num_epochs)
-
-    train_network(
-        model,
-        optimizer,
-        criterion,
-        X_train,
-        y_train,
-        cfg.training.num_epochs,
-        train_losses,
+    dm = data_module(
+        path=cfg.data.path,
+        name=cfg.data.name,
+        X_name=cfg.data.X_name,
+        y_name=cfg.data.y_name,
+        repo=cfg.data.repo,
+        col_names=cfg.data.col_names,
+        nums=cfg.data.nums,
+        test_size=cfg.data.test_size,
+        val_size=cfg.data.val_size,
+        batch_size=cfg.data.batch_size,
+        num_workers=cfg.data.num_workers,
     )
+
+    model = lightning_nn_classification_model(cfg)
+
+    mlf_logger = pl.loggers.MLFlowLogger(
+        experiment_name=cfg.logg.exp_name,
+        tracking_uri=cfg.logg.uri,
+    )
+    mlf_logger.log_hyperparams(
+        params={"git commit id": "58d34d9d1ceb8b9b851aaad475e967ba82f8cc46"}
+    )
+
+    callbacks = [
+        pl.callbacks.LearningRateMonitor(logging_interval="step"),
+        pl.callbacks.DeviceStatsMonitor(),
+        pl.callbacks.RichModelSummary(max_depth=cfg.callbacks.model_summary.max_depth),
+    ]
+
+    trainer = pl.Trainer(
+        max_epochs=cfg.training.num_epochs,
+        log_every_n_steps=cfg.training.log_step,
+        logger=mlf_logger,
+        callbacks=callbacks,
+    )
+
+    trainer.fit(model, train_dataloaders=dm)
+
+    client = MlflowClient(tracking_uri=cfg.logg.uri)
+    client.search_experiments()
+
     pickle.dump(model, open(cfg.model.path + cfg.model.name, "wb"))
+
+    X_input = torch.randn(20, 4)
+    torch.onnx.export(model, X_input, cfg.model.path + cfg.model.name_onnx)
+    onnx_model = onnx.load_model(cfg.model.path + cfg.model.name_onnx)
+    mlflow.set_tracking_uri(cfg.logg.uri)
+    with mlflow.start_run():
+        signature = infer_signature(X_input.numpy(), model(X_input).detach().numpy())
+        mlflow.onnx.log_model(onnx_model, "Iris_model", signature=signature)
+    # onnx_pyfunc = mlflow.pyfunc.load_model(model_info.model_uri)
+
+    # predictions = onnx_pyfunc.predict(X_input.numpy())
+    # print(predictions)
 
 
 if __name__ == "__main__":
